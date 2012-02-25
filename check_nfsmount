@@ -1,0 +1,125 @@
+#!/bin/bash
+# NFS mount plugin for Nagios
+# Written by Tim Gibbon nagios-plugin@chegwin.org
+# Last Modified: 29-Sep-2008
+#
+# Description:
+#
+# This plugin will check the status of a remote servers NFS shares. Note that
+# in the event of nfsd failing and portmap remaining up, showmount will still
+# return a list of shares and zero error code. If you are concerned about this
+# then do not use this script.
+#
+# Add the following to /etc/nagios2/conf.d/check_nfsmount.cfg
+#define command {
+#        command_name check_nfsmount
+#        command_line $USER1$/check_nfsmount -H $HOSTADDRESS$
+#        }
+# Add the following to your main services_nagios2.cfg
+#
+#define service {
+#        hostgroup_name                 	nfs-servers 
+#        service_description             NFS
+#	check_command                   check_nfsmount
+#        use                             generic-service
+#	notification_interval           0 ; set > 0 if you want to be renotified
+#}
+# Add the following to your hostgroups_nagios2.cfg
+#define hostgroup {
+#	hostgroup_name nfs-servers
+#	alias NFS servers
+#	members	icybox
+#	}
+
+
+
+
+
+# Location of the showmount command (if not in path)
+SHOWMOUNT=`which showmount`
+
+
+# Don't change anything below here
+
+# Nagios return codes
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+STATE_UNKNOWN=3
+STATE_DEPENDENT=4
+
+if [ ! -x "${SHOWMOUNT}" ]
+then
+	echo "UNKNOWN: $SHOWMOUNT not found or is not executable by the nagios user"
+	exitstatus=$STATE_UNKNOWN
+	exit $exitstatus
+fi
+
+PROGNAME=`basename $0`
+
+print_usage() {
+	echo "Usage: $PROGNAME -H <hostname>"
+	echo ""
+	echo "Notes:"
+	echo "-H: Hostname - Can be a hostname or IP address"
+	echo ""
+}
+
+print_help() {
+	print_usage
+	echo ""
+	echo "This plugin will check the NFS mounts on a remote (or local with -H localhost) NFS server."
+	echo ""
+	exit 0
+}
+
+
+#exitstatus=${STATE_UNKNOWN} #default
+
+while test -n "$1"; do
+	case "$1" in
+		--help)
+			print_help
+			exit $STATE_OK
+			;;
+		-h)
+			print_help
+			exit $STATE_OK
+			;;
+		-H)
+			HOSTNAME=$2
+			shift
+			;;
+		*)
+			print_help
+			exit $STATE_OK
+	esac
+	shift
+done
+
+# Check arguments for validity
+if [ -z ${HOSTNAME} ]
+then
+	echo "You must specify a hostname (or localhost to test the local system)"
+	print_usage
+	exitstatus=$STATE_UNKNOWN
+	exit $exitstatus
+fi
+
+# Run basic showmount and find our status
+SHOWMOUNT_OUTPUT=`${SHOWMOUNT} -e ${HOSTNAME} 2>&1`
+
+if [ $? -ne 0 ]
+then
+exitstatus=${STATE_CRITICAL}
+else
+exitstatus=${STATE_OK}
+fi
+
+# Remove the wildcards as they cause a complete listing of CWD
+# Uncomment the following 2 lines if you wish to have a list of shares
+# in your Nagios output
+#CLEANED_SHOWMOUNT_OUTPUT=`${SHOWMOUNT} -e ${HOSTNAME} 2>&1 | sed -e s/\*//g`
+#echo ${CLEANED_SHOWMOUNT_OUTPUT}
+
+exit $exitstatus

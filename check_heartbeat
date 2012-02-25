@@ -1,0 +1,104 @@
+#!/bin/bash
+# Author: Emmanuel Bretelle
+# Date: 12/03/2010
+# Description: Retrieve Linux HA cluster status using cl_status
+# Based on http://www.randombugs.com/linux/howto-monitor-linux-heartbeat-snmp.html 
+#
+# Autor: Stanila Constantin Adrian
+# Date: 20/03/2009
+# Description: Check the number of active heartbeats
+# http://www.randombugs.com
+
+# Get program path
+REVISION=1.3
+PROGNAME=`basename $0`
+PROGPATH=`echo $0 | /bin/sed -e 's,[\\/][^\\/][^\\/]*$,,'`
+
+NODE_NAME=`uname -n`
+CL_ST='/usr/bin/cl_status'
+
+#nagios error codes
+#. $PROGPATH/utils.sh 
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+usage () {
+    echo "\
+Nagios plugin to heartbeat.
+
+Usage:
+  $PROGNAME 
+  $PROGNAME [--help | -h]
+  $PROGNAME [--version | -v]
+
+Options:
+  --help -l	Print this help information
+  --version -v  Print version of plugin
+"
+}
+
+help () {
+    print_revision $PROGNAME $REVISION
+    echo; usage; echo; support
+}
+
+
+while test -n "$1"
+do
+  case "$1" in
+    --help | -h)
+      help
+      exit $STATE_OK;;
+    --version | -v)
+      print_revision $PROGNAME $REVISION
+      exit $STATE_OK;;
+#    -H)
+#      shift
+#      HOST=$1;;
+#    -C)
+#      shift
+#      COMMUNITY=$1;;
+    *)
+      echo "Heartbeat UNKNOWN: Wrong command usage"; exit $UNKNOWN;;
+  esac
+  shift
+done
+
+$CL_ST hbstatus > /dev/null
+res=$?
+if [ $res -ne 0 ]
+then
+  echo "Heartbeat CRITICAL: Heartbeat is not running on this node"
+  exit $CRITICAL
+fi
+
+declare -i I=0
+declare -i A=0
+NODES=`$CL_ST listnodes`
+
+for node in $NODES
+do
+  status=`$CL_ST nodestatus $node`
+  let I=$I+1
+  if [ $status == "active" ]
+  then
+    let A=$A+1
+  fi
+done
+
+
+if [ $A -eq 0 ]
+then
+  echo "Heartbeat CRITICAL: $A/$I"
+  exit $CRITICAL
+elif [ $A -ne $I ]
+then
+  echo "Heartbeat WARNING: $A/$I"
+  exit $WARNING
+else
+  echo "Heartbeat OK: $A/$I"
+  exit $OK
+fi
+

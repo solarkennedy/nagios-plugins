@@ -1,0 +1,11 @@
+#!/bin/bash
+#
+# check_cfengine_classes
+# Kyle Anderson, 2011, Under the GPL 2 
+#
+# This is for nagios to see what classes this server is part of.
+# Doesn't quite work yet.
+#
+# the allclasses file is not normally world readable, so special cfengine glue puts it in /var/tmp/ for this
+cat /var/tmp/allclasses  | sort  -u
+

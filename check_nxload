@@ -1,0 +1,29 @@
+#!/bin/sh
+# 
+# check_nxload
+# Kyle Anderson, 2011, Under the GPL 2
+#
+# nxcheckload - sample script for calculation of the load for a node.
+# Reports back a metric for NX to load balance.
+# Not really a nagios check, but abusing nrpe for poor-mans load balancing.
+
+# Be sure to use C numeric for calculations
+export LC_NUMERIC=C
+
+# The 3 variables of load from uptime
+LOADXX=$(awk '{ printf("(100-%s)+(100-%s)+(100-%s)\n", $1, $2, $3); }' /proc/loadavg | bc -q)
+
+# Add of total memory and free memory
+Mt=$(awk 'BEGIN { N=0 } /MemTotal|MemFree/ { N+=$2; } END { print N }' /proc/meminfo)
+
+# NBCPU = number of CPU
+NBCPU=$(cat /proc/cpuinfo | grep ^processor | wc -l)
+
+# CPU = Mhz of the CPU
+CPU=$(cat /proc/cpuinfo | grep "cpu MHz" | head -n1 | cut -d':' -f2 | cut -d' ' -f2)
+
+# Number of Xorg already launch and running.
+UNB=$(ps aux | grep Xorg | grep -v grep | wc -l)
+
+# Final calcul of the number of load.
+echo "100 * $LOADXX + $Mt + ( $NBCPU * $CPU ) / 100 + $UNB * 100" | bc -q | cut -d. -f1

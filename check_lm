@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# check_lm
+# By Kyle Anderson, 2011, Under GPL 2
+# Checks a host and port and runs lmstat to make sure it is flexlm is responding
+
+HOST=$1
+PORT=$2
+
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+echo -n  "$HOST:$PORT - "
+lmstat -a -c $PORT@$HOST
+if [ $? -eq 0 ]; then
+	echo LM is running on port $PORT
+	exit $STATE_OK
+else
+	echo LM isnt running on port $PORT
+	exit $STATE_CRITICAL
+fi

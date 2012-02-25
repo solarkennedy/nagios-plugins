@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# check_srun
+# Kyle Anderson, 2012, Under the GPL 2
+#
+# Runs an srun on all slurm queues. Detects broken slurmness 
+# You might need to make this sudo or add the nagios user to your slurm allowed users
+# Doesn't really work well
+
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+
+FAILURE=false
+# Get a list of all queues
+for QUEUE in `sinfo -h -a | awk '{ print $1 }'` 
+do
+	cd /tmp
+	srun -p $QUEUE /bin/true
+	if [ $? -ne 0 ]; then
+		FAILURE=$QUEUE
+	fi
+done
+
+if ! sinfo -h -a >/dev/null 2>/dev/null ; then
+	FAILURE=SRUN
+fi
+
+if [ $FAILURE = false ]; then
+   echo "OK: We ran an srun on all queues"
+   exit $STATE_OK
+elif [ $FAILURE = SRUN ]; then
+   echo "CRITICAL: Could not run sinfo as nagios"
+   exit $STATE_UNKNOWN
+else
+   echo "CRITICAL: Failure on partition $FAILURE"
+   exit $STATE_CRITICAL
+fi

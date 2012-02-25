@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# check_licenses
+# By Kyle Anderson, 2011, Under the GPL 2
+#
+# Nrpe check to see if we our out of licenses with Flexlm
+# Requires this sudo line:
+# nagios ALL=NOPASSWD:/bin/netstat -anptu
+#
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+
+
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+
+CRITICAL=NO
+
+# Enumerate through each liscense server:
+for PORT in `sudo netstat -natpu | grep lm | grep LIST | awk '{ print $4 }' | cut -f 2 -d :`
+do
+
+IFS="
+"
+	#Extract our usage
+	for STATE in `lmstat -a -c $PORT@localhost | grep Start | awk '{ print $3 " " $11 " " $6 }' | sort -k 2 -n`
+	do
+	
+		SERVICE=`echo $STATE | cut -f 1 -d " "`
+		USED=`echo $STATE | cut -f 2 -d " "`
+		AVAIL=`echo $STATE | cut -f 3 -d " "`
+  	 
+		if ! [ -z "$STATE" ]; then
+			if [ $USED -eq $AVAIL ]; then
+				echo "CRITICAL: All $USED licenses for $SERVICE are in use!"
+				CRITICAL="YES"
+			fi
+		fi
+	done 
+done
+
+if [ "$CRITICAL" == "NO" ]; then
+	echo "We have enough licenses for everything"   
+fi
+
+# LAZY... just print it again for printing purposes
+echo
+echo "More info:"
+for PORT in `sudo netstat -natpu | grep lm | grep LIST | awk '{ print $4 }' | cut -f 2 -d :`
+do
+
+IFS="
+"
+        #Extract our usage
+        for STATE in `lmstat -a -c $PORT@localhost | grep Start | awk '{ print $3 " " $11 " " $6 }' | sort -k 2 -n`
+        do
+
+                SERVICE=`echo $STATE | cut -f 1 -d " "`
+                USED=`echo $STATE | cut -f 2 -d " "`
+                AVAIL=`echo $STATE | cut -f 3 -d " "`
+
+               echo "$SERVICE:     Used: $USED         Available: $AVAIL"
+        done
+done | sort
+
+if [ "$CRITICAL" == "YES" ]; then
+        exit $STATE_CRITICAL
+else
+        exit $STATE_OK
+fi
+
