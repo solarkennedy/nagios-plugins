@@ -1,0 +1,79 @@
+#!/bin/bash
+#
+#  Uses ipmi tool to get Supermicro power supply status.  This works
+#  on the X8 class motherboards and may or may not require changes to
+#  work on other motherboards and chassis.
+#
+#  Copyright (c) 2010, tummy.com, ltd., All Rights Reserved.
+#  Written by Kyle Anderson, tummy.com, ltd.
+#  Under the GPL v2 License 
+
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+
+if [ $# -lt 1 ]; then
+	echo "USAGE: -H host -U ipmi_username -P ipmi_password"
+	exit $STATE_UNKNOWN
+fi
+
+while test -n "$1"; do
+        case "$1" in
+                -H)
+                        HOST=$2
+                        shift
+                        ;;
+                -U)
+                        IPMIUSER=$2
+                        shift
+                        ;;
+                -P)
+                        PASSWORD=$2
+                        shift
+                        ;;
+                *)
+                        echo "Unknown argument: $1"
+                        exit $STATE_UNKNOWN
+                        ;;
+        esac
+        shift
+done
+
+if [ -z $HOST ]; then
+	echo "ERROR: I need a host (-H)"
+	exit $STATE_UNKNOWN
+elif [ -z $IPMIUSER ]; then
+        echo "ERROR: I need a user (-U)"
+        exit $STATE_UNKNOWN
+elif [ -z $PASSWORD ]; then
+        echo "ERROR: I need a password (-P)"
+        exit $STATE_UNKNOWN
+fi
+
+if ! which ipmitool >/dev/null 2>&1; then
+	echo "ERROR: No ipmitool found in my path"
+	exit $STATE_UNKNOWN
+fi
+
+#Secret RAW IPMI Commands Passed down from Supermicro Sages
+POWER1=`ipmitool -H $HOST -U $IPMIUSER -P $PASSWORD raw 0x06 0x52 0x07 0x78 0x01 0x78 2>/dev/null | grep -v "Data length = 4"`
+POWER2=`ipmitool -H $HOST -U $IPMIUSER -P $PASSWORD raw 0x06 0x52 0x07 0x7a 0x01 0x78 2>/dev/null | grep -v "Data length = 4"`
+#POWER3=`ipmitool -H $HOST -U $IPMIUSER -P $PASSWORD raw 0x06 0x52 0x07 0x7c 0x01 0x78 2> /dev/null | tail -n 1`
+
+if [ "$POWER1" == ' 01' ] && [ "$POWER2" == ' 01' ] ; then 
+	echo "OK: Power supply status OK"
+	exit $STATE_OK
+elif [ "$POWER1" != ' 01' ]; then
+	echo "CRITICAL: Power Supply 1 failure"
+        exit $STATE_CRITICAL
+elif [ "$POWER2" != ' 01' ]; then
+	echo "CRITICAL: Power Supply 2 failure"
+        exit $STATE_CRITICAL
+fi
