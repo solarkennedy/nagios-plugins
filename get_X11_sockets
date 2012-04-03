@@ -1,0 +1,5 @@
+#!/bin/bash
+# Reports back a list of X Sockets for sanity checking
+cd /tmp/.X11-unix/
+ls | sort | grep "^X....$" | sed 's/^X//g'
+

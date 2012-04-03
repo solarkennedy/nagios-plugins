@@ -1,0 +1,134 @@
+#!/bin/bash
+#
+# Nrpe check to ensure that the nx user's session is still valid, i.e. has gnome-session, gnome-panel and current, valid /tmp/.X<displayID>-lock file
+# Called by check_nx_session_sanity and runs on actual nx node
+
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+
+
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+
+
+IFS="
+"
+
+STATE=$STATE_OK
+
+if [ "$#" != "4" ];then
+	echo "Usage: check_nx_single_session <userID> <displayID> <nxSessionID> <sessiontype>. Called with $*"
+	exit $STATE_UNKNOWN
+fi
+
+USER=$1
+NXDISPLAY=$2
+SESSION=$3
+TYPE=$4
+
+checkGNOME () {
+        # Verify that gnome-session is running
+        # This is correlated to the specific nxagent session by the use of process group ID
+
+	pgid=$1
+
+	if [ ! "$pgid" ]; then
+		echo checkGnome\(\) needs argument of process group ID
+		return $STATE_CRITICAL	
+	fi
+
+        ps h -g $pgid -o args | grep -v dbus-launch|grep -q /usr/bin/gnome-session
+
+        if [ "$?" != "0" ]; then
+                echo No gnome-session for $USER/$NXDISPLAY/$SESSION on $HOSTNAME
+                return $STATE_CRITICAL
+        fi
+
+        # Verify that gnome-panel is running
+        # This is correlated to the specific nxagent session by the use of process group ID
+        ps h -g $pgid -o args | grep -q gnome-panel
+
+        if [ "$?" != "0" ]; then
+                echo No gnome-panel for $USER/$NXDISPLAY/$SESSION on $HOSTNAME
+                return $STATE_CRITICAL
+        fi
+
+	return $STATE_OK
+}
+
+checkKDE () {
+        # Verify that KDE is running
+        # This is correlated to the specific nxagent session by the use of process group ID
+
+        pgid=$1
+
+        if [ ! "$pgid" ]; then
+                echo checkKDE\(\) needs argument of process group ID
+                return $STATE_CRITICAL
+        fi
+
+        ps h -g $pgid -o args | grep -q "kwrapper4 ksmserver"
+
+        if [ $? -ne 0 ];then
+                echo No kwrapper4 ksmserver for $USER/$NXDISPLAY/$SESSION on $HOSTNAME
+                return $STATE_CRITICAL
+        fi
+
+	return $STATE_OK
+}
+
+# Verify that X lock file exists and is owned by user
+# This is correlated to the specific nxagent session by the use of $NXDISPLAY
+/usr/bin/stat /tmp/.X${NXDISPLAY}-lock | grep Uid: | egrep -q "/ *$USER\)"
+
+if [ "$?" != "0" ];then
+        echo No X lockfile for $USER/$NXDISPLAY/$SESSION on $HOSTNAME
+        STATE=$STATE_CRITICAL
+fi
+
+
+# Verify that nxagent process is running for particular user, display and session ID
+ps -f -u $USER | grep nxagent | grep :$NXDISPLAY |grep -q $SESSION
+
+if [ "$?" != "0" ]; then
+	echo No nxagent for $USER/$NXDISPLAY/$SESSION on $HOSTNAME as reported by nxserver --list
+	exit $STATE_CRITICAL
+else
+	# grab the process group ID of the nxagent process
+	pgid=`ps -u $USER -o pgid,comm,args | grep nxagent | grep :$NXDISPLAY |grep $SESSION | awk '{print $1}'` 
+
+	# Don't even continue to check for gnome or kde processes if nxagent isn't running (need nxagent's pgid for those checks)
+	if [ ! $pgid ];then
+		echo Cannot find process group ID for nxagent with args $USER $NXDISPLAY $SESSION on $HOSTNAME
+		exit $STATE_CRITICAL
+	fi
+fi
+
+#
+# Determine whether GNOME or KDE
+#
+if [ "$TYPE" == "unix-gnome" ];then
+	# only change STATE if it's not STATE_OK, our default
+	checkGNOME $pgid || STATE=$?
+elif [ "$TYPE" == "unix-kde" ];then
+	# only change STATE if it's not STATE_OK, our default
+	checkKDE $pgid || STATE=? 	
+elif [ "$TYPE" == "unix-application" ];then
+	/bin/true
+else
+	echo The window manager type was not passed as an argument or Im not programmed to look it: $TYPE
+fi
+
+
+# nrpe requires *some* output
+echo -n " "
+
+exit $STATE
+
+	

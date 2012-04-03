@@ -1,0 +1,47 @@
+#!/bin/bash
+#
+# Nrpe check to ensure that the nx user's session is still valid, i.e. has gnome-session, gnome-panel and current, valid /tmp/.X<displayID>-lock file
+
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+
+
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+
+
+IFS="
+"
+
+STATE=$STATE_OK
+
+for line in `sudo /usr/bin/nxserver --list|  grep "^.*\..*\..*\..*"`
+do
+	NXTARGET=`echo $line | awk '{print $1}'`
+	DISPLAY=`echo $line | awk '{print $2}'`
+	USER=`echo $line | awk '{print $3}'`
+	SESSION=`echo $line | awk '{print $5}'`
+
+	# determine whether this session is a desktop session (with a window manager to health-check) or a portal-launched
+	# nx applicaiton. Pass argument to nx_node accordingly.
+
+	sessiontype=`sudo cat /var/lib/nxserver/db/running/sessionId\{$SESSION\} |tr "," "\n"|grep type=|awk -F= '{print $2}'`
+
+	/usr/lib64/nagios/plugins/check_nrpe  -u -H $NXTARGET -c check_nx_single_session -a $USER $DISPLAY $SESSION $sessiontype || STATE=$?
+done
+
+if [ $STATE -eq $STATE_OK ];then
+	echo All NX sessions appear sane
+else
+	echo Some NX sessions borked
+fi
+
+exit $STATE
+
+	

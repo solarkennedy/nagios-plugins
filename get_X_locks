@@ -1,0 +1,5 @@
+#!/bin/bash
+# Reports back a list of Xlocks for sanity checking
+cd /tmp
+ls .X*-lock | sort | grep ".X....-lock" | sed 's/^\.X//g' | cut -f 1 -d "-"
+

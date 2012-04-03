@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Reports back a list of NXlocks for sanity checking
+cd /tmp
+ls .nX*-lock | sort | sed 's/^\.nX//g' | cut -f 1 -d "-"

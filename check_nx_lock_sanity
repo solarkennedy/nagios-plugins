@@ -1,0 +1,99 @@
+#!/bin/bash
+# Gets a list of locks and compares them agains what NX thinks it should have
+# Reports back if there is a difference
+
+# check for plugin directory where utils.sh lives
+[ -d /usr/lib/nagios/plugins ]   && UTILPATH=/usr/lib/nagios/plugins
+[ -d /usr/lib64/nagios/plugins ] && UTILPATH=/usr/lib64/nagios/plugins
+
+
+#  load states and strings
+if [ -x "$UTILPATH"/utils.sh ]; then
+        . "$UTILPATH"/utils.sh
+else
+        echo "ERROR: Cannot find utils.sh"
+        exit
+fi
+
+# Our field separater is the new line, not a space or tab. Needed when we iterate through nxserver --list
+IFS="
+"
+
+STATE=$STATE_OK
+TEMPFOLDER=`mktemp -d`
+
+# If we are load balancing, check all defined nodes, localhost otherwise
+source /etc/nxserver/node.conf
+if [ -z $LOAD_BALANCE_SERVERS ] ; then
+        NXTARGETS="127.0.0.1"
+else
+        NXTARGETS=$LOAD_BALANCE_SERVERS
+fi
+
+# Collect what NX thinks the locks should be
+for line in `sudo /usr/bin/nxserver --list|  grep "^.*\..*\..*\..*"`
+do
+	NXTARGET=`echo $line | awk '{print $1}'`
+	DISPLAY=`echo $line | awk '{print $2}'`
+	USER=`echo $line | awk '{print $3}'`
+	SESSION=`echo $line | awk '{print $5}'`
+
+	#Collect all the displays that should exist on the target
+	echo "$DISPLAY" >> $TEMPFOLDER/$NXTARGET-goodlocks.txt
+
+done
+
+# If there is no one logged in, we have to touch this file to be empty
+touch $TEMPFOLDER/127.0.0.1-goodlocks.txt
+
+# Go through the servers and see what locks there are
+for NXTARGET in `echo $NXTARGETS | tr " " "\n" | sort -u`
+do
+	# Get all the existing locks on that system
+	/usr/lib64/nagios/plugins/check_nrpe  -u -H $NXTARGET -c get_X_locks | grep -v "NRPE" | sort > $TEMPFOLDER/$NXTARGET-existing_x_locks.txt
+	/usr/lib64/nagios/plugins/check_nrpe  -u -H $NXTARGET -c get_X11_sockets | grep -v "NRPE" | sort > $TEMPFOLDER/$NXTARGET-existing_x11_sockets.txt
+	
+
+	# Sort the locks we have that we know are good
+	sort $TEMPFOLDER/$NXTARGET-goodlocks.txt -o $TEMPFOLDER/$NXTARGET-goodlocks.txt
+
+	# Diff it
+	diff $TEMPFOLDER/$NXTARGET-existing_x_locks.txt $TEMPFOLDER/$NXTARGET-goodlocks.txt > /dev/null
+	if [ $? -ne 0 ]; then
+		STATE=$STATE_CRITICAL
+		echo "Difference in X lock (/tmp/.Xbla) files for $NXTARGET:"
+		diff $TEMPFOLDER/$NXTARGET-existing_x_locks.txt $TEMPFOLDER/$NXTARGET-goodlocks.txt | grep -e "<" -e ">"
+	fi
+	diff $TEMPFOLDER/$NXTARGET-existing_x11_sockets.txt $TEMPFOLDER/$NXTARGET-goodlocks.txt > /dev/null
+	if [ $? -ne 0 ]; then
+		STATE=$STATE_CRITICAL
+		echo "Difference in X socket files (/tmp/.X11-unix) for $NXTARGET:"
+		diff $TEMPFOLDER/$NXTARGET-existing_x11_sockets.txt $TEMPFOLDER/$NXTARGET-goodlocks.txt | grep -e "<" -e ">"
+	fi
+done
+
+# Check NX locks, outside the for loop because they are always on localhost
+/usr/lib64/nagios/plugins/check_nrpe  -u -H localhost -c get_NX_locks | grep -v "NRPE" | sort > $TEMPFOLDER/all-existing_nx_locks.txt
+cat $TEMPFOLDER/*-goodlocks.txt | sort > $TEMPFOLDER/all-goodlocks.txt
+diff $TEMPFOLDER/all-existing_nx_locks.txt $TEMPFOLDER/all-goodlocks.txt > /dev/null
+if [ $? -ne 0 ]; then
+	STATE=$STATE_CRITICAL
+	echo "Difference in NX lock files (/tmp/.nXbla-unix) for localhost:"
+	diff $TEMPFOLDER/all-existing_nx_locks.txt $TEMPFOLDER/all-goodlocks.txt | grep -e "<" -e ">"
+fi
+
+
+if [ $STATE -eq $STATE_OK ];then
+	echo All Locks match on the nodes
+else
+	echo "There are lock/socket differences. "
+	echo "< Means that the lock/socket is on the node, and shouldn't be"
+	echo "> Means nx thinks the lock/socket should be there, but isn't"
+fi
+
+# Don't feel safe to do this yet
+#rm -rf $TEMPFOLDER
+
+exit $STATE
+
+
