@@ -43,19 +43,22 @@ if [ "$warn" -lt "$crit" -o "$warn" -eq "$crit" ]; then
         exit 3
 fi
 
-use=`echo $(( ($free * 100) / $full ))`
-
-if [ "$use" -gt "$warn" -o "$use" -eq "$warn" ]; then
-        echo "OK: $use% free swap"
+if [ $full -eq 0 ]; then
+        echo "OK: no swap use"
         exit 0
- elif [ "$use" -lt "$warn" -a "$use" -gt "$crit" ]; then
-        echo "Warning: $use% free swap"
-        exit 1
- elif [ "$use" -eq "$crit" -o "$use" -lt "$crit" ]; then
-        echo "Critical: $use% free swap"
-        exit 2
  else
-        echo "Unknown"
-        exit 3
+	use=`echo $(( ($free * 100) / $full ))`
+	if [ "$use" -gt "$warn" -o "$use" -eq "$warn" ]; then
+        	echo "OK: $use% free swap"
+        	exit 0
+ 	elif [ "$use" -lt "$warn" -a "$use" -gt "$crit" ]; then
+        	echo "Warning: $use% free swap"
+        	exit 1
+ 	elif [ "$use" -eq "$crit" -o "$use" -lt "$crit" ]; then
+        	echo "Critical: $use% free swap"
+        	exit 2
+ 	else
+        	echo "Unknown"
+        	exit 3
+	fi
 fi
-
