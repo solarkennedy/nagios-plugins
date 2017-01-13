@@ -7,7 +7,7 @@ then
 	echo "No logfile exists"
 	exit 3
 else
-	ERRORS=$( grep -c -e "HARDWARE ERROR" -e "Hardware event" /var/log/mcelog )
+	ERRORS=$( grep -c -e "HARDWARE ERROR" -e "Hardware event" ${LOGFILE} )
 	if [ $ERRORS -eq 0 ]
 	then
 		echo "OK: $ERRORS hardware errors found"
