@@ -4,17 +4,17 @@ LOGFILE=/var/log/mcelog
 
 if [ ! -f "$LOGFILE" ]
 then
-	echo "No logfile exists"
+	echo "No logfile exists | errors=0"
 	exit 3
 else
 	ERRORS=$( grep -c -e "HARDWARE ERROR" -e "Hardware event" ${LOGFILE} )
-	if [ $ERRORS -eq 0 ]
+	if [ "${ERRORS}" -eq "0" ]
 	then
-		echo "OK: $ERRORS hardware errors found"
+		echo "OK: ${ERRORS} hardware errors found | errors=${ERRURS}"
 		exit 0
-	elif [ $ERRORS -gt 0 ]
+	elif [ "$ERRORS" -gt "0" ]
 	then
-		echo "WARNING: $ERRORS hardware errors found"
+		echo "WARNING: ${ERRORS} hardware errors found | errors=${ERRORS}"
 		exit 1
 	fi
 fi
