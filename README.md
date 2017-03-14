@@ -1,4 +1,4 @@
-This is my nagios plugin collection. 
+This is my nagios/icinga2 plugin collection. 
 
 Some I wrote, some I didn't. 
 

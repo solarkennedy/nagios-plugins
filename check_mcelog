@@ -1,6 +1,22 @@
 #!/bin/bash
 
+#####
+#
+# Monitoring plugin to check for hardware errors logged by mcelog
+#
+#
+# You can use the following CheckCommand definition for icinga2:
+#
+#   object CheckCommand "mcelog" {
+#    import "plugin-check-command"
+#    command = [ LocalPluginDir + "/check_mcelog.sh" ]
+#  }
+#
+#####
+
+
 LOGFILE=/var/log/mcelog
+
 
 if [ ! -f "${LOGFILE}" ]
 then
